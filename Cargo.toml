@@ -1,0 +1,16 @@
+[workspace]
+members = [".", "profiler", "profiler-macros"]
+resolver = "2"
+
+[package]
+name = "rust-yudi-profiler"
+version = "0.1.0"
+edition = "2024"
+
+[[bin]]
+name = "rust-yudi-profiler"
+path = "src/main.rs"
+
+[dependencies]
+profiler        = { path = "profiler" }
+profiler-macros = { path = "profiler-macros" }
