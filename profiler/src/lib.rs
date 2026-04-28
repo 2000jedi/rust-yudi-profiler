@@ -128,3 +128,80 @@ pub fn print_summary() {
         println!("{}", h_bar("└", "┴", "┘"));
     });
 }
+
+// ─── CSV output ──────────────────────────────────────────────────────────────
+
+use std::io::Write as _;
+
+const CSV_HEADER: &str = "name,calls,total_nanos,avg_nanos";
+
+fn csv_escape(s: &str) -> String {
+    if s.contains(',') || s.contains('"') || s.contains('\n') {
+        format!("\"{}\"", s.replace('"', "\"\""))
+    } else {
+        s.to_string()
+    }
+}
+
+/// Writes the current thread's profile data as CSV data rows (no header) to `out`.
+fn write_csv_rows<W: std::io::Write>(out: &mut W) -> std::io::Result<()> {
+    PROFILE_DATA.with(|data| {
+        let map = data.borrow();
+        let mut entries: Vec<(&&'static str, &ProfileEntry)> = map.iter().collect();
+        entries.sort_by(|a, b| match (a.1.total_nanos, b.1.total_nanos) {
+            (Some(_), None) => std::cmp::Ordering::Less,
+            (None, Some(_)) => std::cmp::Ordering::Greater,
+            (Some(x), Some(y)) => y.cmp(&x),
+            (None, None) => a.0.cmp(b.0),
+        });
+
+        for (name, entry) in entries {
+            let name_field = csv_escape(name);
+            match entry.total_nanos {
+                Some(nanos) => {
+                    let avg = if entry.call_count > 0 {
+                        nanos / entry.call_count
+                    } else {
+                        0
+                    };
+                    writeln!(out, "{},{},{},{}", name_field, entry.call_count, nanos, avg)?;
+                }
+                None => {
+                    writeln!(out, "{},{},,", name_field, entry.call_count)?;
+                }
+            }
+        }
+        Ok(())
+    })
+}
+
+/// Called by code emitted from `summarise_csv!()`.
+/// Prints the CSV header followed by data rows to stdout.
+pub fn print_csv() {
+    let stdout = std::io::stdout();
+    let mut handle = stdout.lock();
+    // Errors writing to stdout are unrecoverable here; mirror println! semantics.
+    let _ = writeln!(handle, "{}", CSV_HEADER);
+    let _ = write_csv_rows(&mut handle);
+}
+
+/// Called by code emitted from `append_file!(path)`.
+/// Appends CSV data rows to `path`, writing the header first if the file
+/// does not exist or is empty.
+pub fn append_file_path(path: &str) -> std::io::Result<()> {
+    use std::fs::OpenOptions;
+    use std::path::Path;
+
+    let needs_header = match std::fs::metadata(Path::new(path)) {
+        Ok(meta) => meta.len() == 0,
+        Err(_) => true,
+    };
+
+    let mut file = OpenOptions::new().create(true).append(true).open(path)?;
+
+    if needs_header {
+        writeln!(file, "{}", CSV_HEADER)?;
+    }
+
+    write_csv_rows(&mut file)
+}

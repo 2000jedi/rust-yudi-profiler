@@ -1,4 +1,4 @@
-use profiler_macros::{count, summarise, timed};
+use profiler_macros::{append_file, count, summarise, summarise_csv, timed};
 
 fn compute_fib(n: u64) -> u64 {
     match n {
@@ -28,4 +28,7 @@ fn main() {
     }
 
     summarise!();
+    println!();
+    summarise_csv!();
+    append_file!("profile.csv").expect("failed to append profile.csv");
 }

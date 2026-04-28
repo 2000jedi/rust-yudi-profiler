@@ -109,3 +109,35 @@ pub fn count(input: TokenStream) -> TokenStream {
     let name_lit = LitStr::new(&name, Span::call_site());
     TokenStream::from(quote! { ::profiler::increment(#name_lit) })
 }
+
+// ─── summarise_csv!() ────────────────────────────────────────────────────────
+
+/// Prints the current thread's profile data as CSV (header + rows) to stdout.
+///
+/// ```rust
+/// summarise_csv!();
+/// ```
+#[proc_macro]
+pub fn summarise_csv(input: TokenStream) -> TokenStream {
+    if !input.is_empty() {
+        return syn::Error::new(Span::call_site(), "`summarise_csv!()` takes no arguments")
+            .to_compile_error()
+            .into();
+    }
+    TokenStream::from(quote! { ::profiler::print_csv() })
+}
+
+// ─── append_file!(path) ──────────────────────────────────────────────────────
+
+/// Appends the current thread's profile data as CSV rows to the file at `path`.
+/// Writes a header row if the file does not exist or is empty.
+/// Returns `std::io::Result<()>`.
+///
+/// ```rust
+/// append_file!("profile.csv").unwrap();
+/// ```
+#[proc_macro]
+pub fn append_file(input: TokenStream) -> TokenStream {
+    let path = parse_macro_input!(input as LitStr);
+    TokenStream::from(quote! { ::profiler::append_file_path(#path) })
+}
