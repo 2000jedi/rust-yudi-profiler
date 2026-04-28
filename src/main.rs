@@ -30,5 +30,19 @@ fn main() {
     summarise!();
     println!();
     summarise_csv!();
-    append_file!("profile.csv").expect("failed to append profile.csv");
+
+    // String literal (&'static str)
+    append_file!("profile.csv").expect("string literal");
+
+    // PathBuf
+    let path: std::path::PathBuf = "profile.csv".into();
+    append_file!(&path).expect("path");
+
+    // Existing file handle
+    let mut f = std::fs::OpenOptions::new()
+        .create(true)
+        .append(true)
+        .open("profile.csv")
+        .expect("open");
+    append_file!(&mut f).expect("file handle");
 }

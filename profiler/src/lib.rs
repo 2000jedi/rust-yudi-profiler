@@ -185,14 +185,19 @@ pub fn print_csv() {
     let _ = write_csv_rows(&mut handle);
 }
 
-/// Called by code emitted from `append_file!(path)`.
-/// Appends CSV data rows to `path`, writing the header first if the file
-/// does not exist or is empty.
-pub fn append_file_path(path: &str) -> std::io::Result<()> {
-    use std::fs::OpenOptions;
-    use std::path::Path;
+// ─── append_file!(target) dispatch ───────────────────────────────────────────
 
-    let needs_header = match std::fs::metadata(Path::new(path)) {
+/// Targets accepted by `append_file!`. Implemented for path-like types
+/// (`&str`, `String`, `&Path`, `PathBuf`, …) and file handles
+/// (`&File`, `&mut File`).
+pub trait AppendTarget {
+    fn append_profile(self) -> std::io::Result<()>;
+}
+
+fn append_to_path(path: &std::path::Path) -> std::io::Result<()> {
+    use std::fs::OpenOptions;
+
+    let needs_header = match std::fs::metadata(path) {
         Ok(meta) => meta.len() == 0,
         Err(_) => true,
     };
@@ -204,4 +209,64 @@ pub fn append_file_path(path: &str) -> std::io::Result<()> {
     }
 
     write_csv_rows(&mut file)
+}
+
+fn append_to_writer<W: std::io::Write>(
+    out: &mut W,
+    needs_header: bool,
+) -> std::io::Result<()> {
+    if needs_header {
+        writeln!(out, "{}", CSV_HEADER)?;
+    }
+    write_csv_rows(out)
+}
+
+// String-like
+impl AppendTarget for &str {
+    fn append_profile(self) -> std::io::Result<()> {
+        append_to_path(std::path::Path::new(self))
+    }
+}
+impl AppendTarget for &String {
+    fn append_profile(self) -> std::io::Result<()> {
+        append_to_path(std::path::Path::new(self))
+    }
+}
+impl AppendTarget for String {
+    fn append_profile(self) -> std::io::Result<()> {
+        append_to_path(std::path::Path::new(&self))
+    }
+}
+
+// Path-like
+impl AppendTarget for &std::path::Path {
+    fn append_profile(self) -> std::io::Result<()> {
+        append_to_path(self)
+    }
+}
+impl AppendTarget for &std::path::PathBuf {
+    fn append_profile(self) -> std::io::Result<()> {
+        append_to_path(self)
+    }
+}
+impl AppendTarget for std::path::PathBuf {
+    fn append_profile(self) -> std::io::Result<()> {
+        append_to_path(&self)
+    }
+}
+
+// File handles. `File: Write` and `&File: Write` both exist in std,
+// so we accept owned, shared, and mut references.
+impl AppendTarget for &std::fs::File {
+    fn append_profile(self) -> std::io::Result<()> {
+        let needs_header = self.metadata().map(|m| m.len() == 0).unwrap_or(false);
+        let mut writer = self;
+        append_to_writer(&mut writer, needs_header)
+    }
+}
+impl AppendTarget for &mut std::fs::File {
+    fn append_profile(self) -> std::io::Result<()> {
+        let needs_header = self.metadata().map(|m| m.len() == 0).unwrap_or(false);
+        append_to_writer(self, needs_header)
+    }
 }

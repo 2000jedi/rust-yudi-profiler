@@ -127,17 +127,23 @@ pub fn summarise_csv(input: TokenStream) -> TokenStream {
     TokenStream::from(quote! { ::profiler::print_csv() })
 }
 
-// ─── append_file!(path) ──────────────────────────────────────────────────────
+// ─── append_file!(target) ────────────────────────────────────────────────────
 
-/// Appends the current thread's profile data as CSV rows to the file at `path`.
-/// Writes a header row if the file does not exist or is empty.
+/// Appends the current thread's profile data as CSV rows to a target.
+/// Accepts any value implementing `profiler::AppendTarget` — string literals,
+/// `&str` / `String`, `&Path` / `PathBuf`, `&File` / `&mut File`, etc.
+/// Writes a header row if the target file is missing or empty.
 /// Returns `std::io::Result<()>`.
 ///
 /// ```rust
 /// append_file!("profile.csv").unwrap();
+/// let path: PathBuf = "profile.csv".into();
+/// append_file!(&path).unwrap();
+/// let mut f = std::fs::OpenOptions::new().create(true).append(true).open("p.csv")?;
+/// append_file!(&mut f).unwrap();
 /// ```
 #[proc_macro]
 pub fn append_file(input: TokenStream) -> TokenStream {
-    let path = parse_macro_input!(input as LitStr);
-    TokenStream::from(quote! { ::profiler::append_file_path(#path) })
+    let expr = parse_macro_input!(input as Expr);
+    TokenStream::from(quote! { ::profiler::AppendTarget::append_profile(#expr) })
 }

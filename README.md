@@ -50,12 +50,17 @@ even_iteration,25,,
 odd_iteration,25,,
 ```
 
-### `append_file!(path)`
-Appends profile data to a CSV file at `path`. Writes a header row if the file does not exist or is empty; otherwise just appends data rows so repeated runs accumulate. Returns `std::io::Result<()>`.
+### `append_file!(target)`
+Appends profile data as CSV to a target. Writes a header row if the target file is missing or empty; otherwise just appends data rows so repeated runs accumulate. Returns `std::io::Result<()>`.
 
-```rust
-append_file!("profile.csv").unwrap();
-```
+`target` can be any value implementing `profiler::AppendTarget`:
+
+| Input | Example |
+|---|---|
+| `&str` (incl. literal) | `append_file!("profile.csv")` |
+| `String` / `&String` | `append_file!(my_string)` |
+| `&Path` / `PathBuf` / `&PathBuf` | `append_file!(&path_buf)` |
+| `&File` / `&mut File` | `append_file!(&mut file)` |
 
 ## Usage
 
