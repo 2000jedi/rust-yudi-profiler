@@ -1,5 +1,6 @@
 use profiler_macros::{append_file, count, summarise, summarise_csv, timed};
 
+#[timed]
 fn compute_fib(n: u64) -> u64 {
     match n {
         0 => 0,
@@ -8,16 +9,20 @@ fn compute_fib(n: u64) -> u64 {
     }
 }
 
+#[timed]
 fn slow_string_work() -> String {
-    (0..1_000).map(|i| i.to_string()).collect::<Vec<_>>().join(", ")
+    (0..1_000)
+        .map(|i| i.to_string())
+        .collect::<Vec<_>>()
+        .join(", ")
 }
 
 fn main() {
     for _ in 0..10 {
-        let _fib = timed!(compute_fib(20));
+        let _fib = compute_fib(20);
     }
 
-    let _s = timed!(slow_string_work());
+    let _s = slow_string_work();
 
     for i in 0..50_u32 {
         if i % 2 == 0 {

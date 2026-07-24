@@ -1,8 +1,9 @@
 use std::cell::RefCell;
 use std::collections::HashMap;
+use std::time::Instant;
 
 /// One slot in the profile table.
-/// `total_nanos` is `None` for pure-count entries (from `profile_count!`).
+/// `total_nanos` is `None` for pure-count entries (from `count!`).
 #[derive(Debug, Default)]
 pub struct ProfileEntry {
     pub total_nanos: Option<u64>,
@@ -14,7 +15,7 @@ thread_local! {
         RefCell::new(HashMap::new());
 }
 
-/// Called by code emitted from `profile!(expr)`.
+/// Records one completed invocation of a timed function.
 #[inline]
 pub fn record(name: &'static str, nanos: u64) {
     PROFILE_DATA.with(|data| {
@@ -25,7 +26,31 @@ pub fn record(name: &'static str, nanos: u64) {
     });
 }
 
-/// Called by code emitted from `profile_count!(name)`.
+/// Records elapsed time when it is dropped at the end of a timed function.
+pub struct TimingGuard {
+    name: &'static str,
+    started_at: Instant,
+}
+
+impl TimingGuard {
+    /// Starts timing an invocation with the given profile name.
+    #[inline]
+    pub fn new(name: &'static str) -> Self {
+        Self {
+            name,
+            started_at: Instant::now(),
+        }
+    }
+}
+
+impl Drop for TimingGuard {
+    #[inline]
+    fn drop(&mut self) {
+        record(self.name, self.started_at.elapsed().as_nanos() as u64);
+    }
+}
+
+/// Called by code emitted from `count!(name)`.
 #[inline]
 pub fn increment(name: &'static str) {
     PROFILE_DATA.with(|data| {
@@ -51,7 +76,7 @@ pub fn print_summary() {
             .iter()
             .filter(|(_, e)| e.total_nanos.is_some())
             .collect();
-        timed.sort_by(|a, b| b.1.total_nanos.cmp(&a.1.total_nanos));
+        timed.sort_by_key(|entry| std::cmp::Reverse(entry.1.total_nanos));
 
         // Counter-only entries sorted by name
         let mut counters: Vec<(&&'static str, &ProfileEntry)> = map
@@ -159,11 +184,7 @@ fn write_csv_rows<W: std::io::Write>(out: &mut W) -> std::io::Result<()> {
             let name_field = csv_escape(name);
             match entry.total_nanos {
                 Some(nanos) => {
-                    let avg = if entry.call_count > 0 {
-                        nanos / entry.call_count
-                    } else {
-                        0
-                    };
+                    let avg = nanos.checked_div(entry.call_count).unwrap_or_default();
                     writeln!(out, "{},{},{},{}", name_field, entry.call_count, nanos, avg)?;
                 }
                 None => {
@@ -211,10 +232,7 @@ fn append_to_path(path: &std::path::Path) -> std::io::Result<()> {
     write_csv_rows(&mut file)
 }
 
-fn append_to_writer<W: std::io::Write>(
-    out: &mut W,
-    needs_header: bool,
-) -> std::io::Result<()> {
+fn append_to_writer<W: std::io::Write>(out: &mut W, needs_header: bool) -> std::io::Result<()> {
     if needs_header {
         writeln!(out, "{}", CSV_HEADER)?;
     }

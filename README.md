@@ -4,18 +4,20 @@ A lightweight Rust proc-macro profiler. Five macros, zero external runtime depen
 
 ## Macros
 
-### `timed!(expr)`
-Wraps any expression, recording elapsed time and call count into thread-local storage.
+### `#[timed]`
+Instruments a function, recording elapsed time and call count for every invocation. Recursive calls are recorded automatically.
 
 ```rust
-let result = timed!(compute_fib(40));
-let s = timed!(my_vec.sort());
+#[timed]
+fn compute_fib(n: u64) -> u64 {
+    // function body
+    n
+}
+
+let result = compute_fib(40);
 ```
 
-The name key is derived automatically from the expression:
-- `foo::bar(args)` → `"bar"`
-- `obj.method(args)` → `"method"`
-- anything else → stringified tokens (capped at 32 chars)
+The function name is used as the profile key. The attribute takes no arguments.
 
 ### `count!(name)`
 Increments a named counter with no timing overhead. Accepts a string literal or a bare identifier.
@@ -32,7 +34,7 @@ Prints a formatted summary table for the current thread. Timed entries are sorte
 ┌────────────────────────────────────┬────────────┬───────────────┬───────────────┐
 │ Name                               │      Calls │    Total (ms) │      Avg (µs) │
 ├────────────────────────────────────┼────────────┼───────────────┼───────────────┤
-│ compute_fib                        │         10 │         0.521 │        52.110 │
+│ compute_fib                        │     218910 │         0.521 │         0.002 │
 │ slow_string_work                   │          1 │         0.183 │       182.574 │
 │ even_iteration                     │         25 │             — │             — │
 │ odd_iteration                      │         25 │             — │             — │
@@ -44,7 +46,7 @@ Prints CSV (header + rows) to stdout. Same sort order as `summarise!()`. Count-o
 
 ```csv
 name,calls,total_nanos,avg_nanos
-compute_fib,10,705036,70503
+compute_fib,218910,705036,3
 slow_string_work,1,276671,276671
 even_iteration,25,,
 odd_iteration,25,,
@@ -77,9 +79,18 @@ Then import and use:
 ```rust
 use profiler_macros::{append_file, count, summarise, summarise_csv, timed};
 
+#[timed]
+fn compute_fib(n: u64) -> u64 {
+    match n {
+        0 => 0,
+        1 => 1,
+        _ => compute_fib(n - 1) + compute_fib(n - 2),
+    }
+}
+
 fn main() {
     for _ in 0..10 {
-        let _fib = timed!(compute_fib(20));
+        let _fib = compute_fib(20);
     }
     count!("startup");
     summarise!();
